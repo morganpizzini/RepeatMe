@@ -1,8 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Input;
+using static RepeatMe.Models.Button;
 
 namespace RepeatMe.Models
 {
@@ -25,12 +29,14 @@ namespace RepeatMe.Models
             //Array of 2 bcs one : keyDown -> two : keyUp
             Input[] array = new Input[1];
             Input input = default(Input);
-            input.type = 1U;
+            input.type = (SendInputType.InputKeyboard);
             input.i_union.keyboardinput.wVk = (BT6)0;
+
             input.i_union.keyboardinput.time = 0;
             input.i_union.keyboardinput.dwExtraInfo = (UIntPtr)0UL;
             input.i_union.keyboardinput.dwFlags = (BT5.KEYDOWN | BT5.SCANCODE);
             input.i_union.keyboardinput.wScan = btn;
+            
             array[0] = input;
             // if METIN2 SPACE has some problems use without key up ->  input.i_union.keyboardinput.dwFlags = BT5.SCANCODE;
             // but first make sure, that SPACE is pressed as last before window switch to lock SPACE.
@@ -43,21 +49,60 @@ namespace RepeatMe.Models
         /// Simulate key press. Dont forget to activate and deactivate specific window 
         /// </summary>
         /// <param name="btn">use EButton.Button.BT7 or use short value example: (short)57 </param>
-        public static void PressKey(short btn)
+        public static void PressKeyOriginal(short btn)
         {
             //Array of 2 bcs one : keyDown -> two : keyUp
             Input[] array = new Input[2];
             Input input = default(Input);
-            input.type = 1U;
+            input.type = (SendInputType.InputKeyboard);
+
             input.i_union.keyboardinput.wVk = (BT6)0;
+
             input.i_union.keyboardinput.time = 0;
             input.i_union.keyboardinput.dwExtraInfo = (UIntPtr)0UL;
             input.i_union.keyboardinput.dwFlags = (BT5.KEYDOWN | BT5.SCANCODE);
             input.i_union.keyboardinput.wScan = (BT7)btn;
+
+            
             array[0] = input;
             input.i_union.keyboardinput.dwFlags = (BT5.KEYUP | BT5.SCANCODE);
             array[1] = input;
             SendInput(1U, array, Input.Size);
+        }
+
+        /// <summary>
+        /// Simulate key press. Dont forget to activate and deactivate specific window 
+        /// </summary>
+        /// <param name="btn">use EButton.Button.BT7 or use short value example: (short)57 </param>
+        public static void PressKey(short btn)
+        {
+            //Array of 2 bcs one : keyDown -> two : keyUp
+            IList<Input> array = new List<Input>();
+
+            Input input = default(Input);
+
+            input.type = (SendInputType.InputKeyboard);
+
+            input.i_union.keyboardinput.dwFlags = BT5.KEYDOWN;
+            input.i_union.keyboardinput.wVk = BT6.SHIFT;
+            array.Add(input);
+
+            input.i_union.keyboardinput.wVk = (BT6)0;
+
+            input.i_union.keyboardinput.time = 0;
+            input.i_union.keyboardinput.dwExtraInfo = (UIntPtr)0UL;
+            input.i_union.keyboardinput.dwFlags = (BT5.KEYDOWN | BT5.SCANCODE);
+            input.i_union.keyboardinput.wScan = (BT7)btn;
+            array.Add(input);
+
+            input.i_union.keyboardinput.dwFlags = (BT5.KEYUP | BT5.SCANCODE);
+            array.Add(input);
+
+            input.i_union.keyboardinput.dwFlags = BT5.KEYUP;
+            input.i_union.keyboardinput.wVk = BT6.SHIFT;
+            array.Add(input);
+
+            SendInput((uint)array.Count(), array.ToArray(), Input.Size);
         }
 
         #endregion
@@ -173,7 +218,7 @@ namespace RepeatMe.Models
         #endregion
 
         #region Struct
-
+        [StructLayout(LayoutKind.Sequential)]
         public struct Input
         {
             public static int Size
@@ -184,10 +229,22 @@ namespace RepeatMe.Models
                 }
             }
 
-            public uint type;
+            public SendInputType type;
             public InputUnion i_union;
-        }
 
+            public Input(SendInputType type)
+            {
+                this.type = type;
+                i_union = new InputUnion();
+            }
+
+        }
+        public enum SendInputType : uint
+        {
+            InputMouse = 0,
+            InputKeyboard = 1,
+            InputHardware = 2
+        }
 
         [StructLayout(LayoutKind.Explicit)]
         public struct InputUnion

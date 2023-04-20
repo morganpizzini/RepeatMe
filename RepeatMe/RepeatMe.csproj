@@ -98,6 +98,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="Models\LetterTime.cs" />
     <Compile Include="Models\Button.cs" />
     <Compile Include="Models\MyProcess.cs" />
     <Compile Include="Models\Setting.cs" />

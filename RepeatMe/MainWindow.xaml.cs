@@ -2,7 +2,6 @@
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -12,6 +11,9 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using RepeatMe.Models;
 using Button = RepeatMe.Models.Button;
+using System.Windows.Threading;
+using System.Linq;
+using System.Diagnostics;
 
 namespace RepeatMe
 {
@@ -37,7 +39,7 @@ namespace RepeatMe
 
 
         int processId;
-        SmartDispatcherTimer timer;
+        DispatcherTimer timer;
 
         private Setting settings = new Setting();
 
@@ -46,11 +48,9 @@ namespace RepeatMe
 
         short deafultKeyPress;
 
-        Dictionary<short, int[]> pressKeys = new Dictionary<short, int[]>();
-
+        List<LetterTime> pressKeys = new List<LetterTime>();
 
         double interval;
-        double millisecondInterval => interval * 1000 - 200; // 200 as buffer
 
         IntPtr hndl() { return new WindowInteropHelper(this).Handle; }
 
@@ -61,48 +61,65 @@ namespace RepeatMe
             // default settings
             settings = sampleSettings;
 
-            timer = new SmartDispatcherTimer();
-            timer.TickTask = Timer_Tick;
+            timer = new DispatcherTimer();
+            timer.Tick += Timer_Tick;
 
             ResetConfig();
         }
-
-        private async Task Timer_Tick()
+        private void Timer_Tick(object sender, EventArgs e)
         {
             if (settings.MaxRotationNumber != 0 && rotation >= settings.MaxRotationNumber)
             {
                 Stop();
                 return;
             }
-            var sw = new Stopwatch();
-            sw.Start();
-            while (sw.ElapsedMilliseconds < millisecondInterval && timer.IsEnabled)
+            UpdateForegroundWindow();
+
+            //TaskKeys();
+
+            TaskDefault();
+
+            rotation++;
+        }
+        private async void TaskKeys()
+        {
+            //TODO should consider waste time before window got focus
+            foreach (var key in pressKeys)
             {
-                var currentWindow = User.GetForegroundWindow();
+                if (!timer.IsEnabled)
+                    return;
                 if (currentWindow != processId)
+                    continue;
+                await Task.Delay(key.Time);
+                Button.PressKey(key.Letter);
+                await Task.Delay(50);
+            }
+        }
+        int currentWindow;
+        private async void UpdateForegroundWindow()
+        {
+            while (timer.IsEnabled)
+            {
+                currentWindow = User.GetForegroundWindow();
+                await Task.Delay(1000); 
+            }
+        }
+        
+        private async void TaskDefault()
+        {
+            while (timer.IsEnabled)
+            {
+                if (!enableDefaultKey || currentWindow != processId)
                 {
                     await Task.Delay(1000);
                     continue;
                 }
-                foreach (var key in pressKeys)
-                {
-                    for (int i = 0; i < key.Value.Length; i++)
-                    {
-                        if (sw.ElapsedMilliseconds - settings.SensibilityRange < key.Value[i] && sw.ElapsedMilliseconds + settings.SensibilityRange > key.Value[i])
-                        {
-                            Button.PressKey(key.Key);
-                            await Task.Delay(50);
-                        }
-                    }
-                }
-                if (enableDefaultKey)
-                {
-                    Button.PressKey(deafultKeyPress);
-                }
+                Button.PressKey(deafultKeyPress);
                 await Task.Delay(settings.StandardDelayTime);
             }
-            rotation++;
         }
+
+       
 
         private void processlist_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -124,7 +141,7 @@ namespace RepeatMe
             rectStatus.Fill = new SolidColorBrush(Color.FromRgb(255, 0, 0));
         }
 
-        private Task Start()
+        private void Start()
         {
             settings.Interval = interval;
 
@@ -133,7 +150,7 @@ namespace RepeatMe
             timer.Interval = TimeSpan.FromSeconds(interval);
             timer.Start();
 
-            var t = Timer_Tick();
+            Timer_Tick(null,null);
 
             btnFind.IsEnabled = false;
             processlist.IsEnabled = false;
@@ -143,11 +160,10 @@ namespace RepeatMe
             btnLoad.IsEnabled = false;
             btnSave.IsEnabled = false;
             rectStatus.Fill = new SolidColorBrush(Color.FromRgb(124, 252, 0));
-            return t;
         }
 
 
-        private async void Button_Click_2(object sender, RoutedEventArgs e)
+        private void Button_Click_2(object sender, RoutedEventArgs e)
         {
             if (processId == 0)
                 return;
@@ -155,8 +171,8 @@ namespace RepeatMe
             var result = double.TryParse(txbInterval.Text, out interval);
             if (!result) return;
 
-            await Start();
-            
+            Start();
+
         }
 
         private void CheckBox_Checked(object sender, RoutedEventArgs e)
@@ -189,7 +205,7 @@ namespace RepeatMe
                     }
                 }
             }
-            
+
         }
 
         private void btnLoad_Click(object sender, RoutedEventArgs e)
@@ -211,7 +227,7 @@ namespace RepeatMe
             saveFileDialog.FileName = "config";
 
             if (saveFileDialog.ShowDialog() == true)
-                File.WriteAllText(saveFileDialog.FileName, JsonConvert.SerializeObject(settings));
+                File.WriteAllText(saveFileDialog.FileName, JsonConvert.SerializeObject(settings,Formatting.Indented));
         }
 
         private void ResetConfig()
@@ -223,10 +239,29 @@ namespace RepeatMe
             deafultKeyPress = enableDefaultKey ? (short)Enum.Parse(typeof(Button.BT7), $"KEY_{settings.DefaultKeyPress.ToUpper()}") : default;
 
             pressKeys.Clear();
-
-            foreach (var item in settings.PressKeys)
+            
+            foreach (var key in settings.PressKeys)
             {
-                pressKeys.Add((short)Enum.Parse(typeof(Button.BT7), $"KEY_{item.Key.ToUpper()}"), item.Value);
+                var letter = (short)Enum.Parse(typeof(Button.BT7), $"KEY_{key.Key.ToUpper()}");
+                pressKeys.AddRange(key.Value.Select(i => new LetterTime
+                {
+                    Letter = (short)Enum.Parse(typeof(Button.BT7), $"KEY_{key.Key.ToUpper()}"),
+                    Time = i
+                }));
+                
+            }
+            pressKeys = pressKeys.OrderBy(x=>x.Time).ToList();
+            var old = 0;
+            for(int x = 0; x < pressKeys.Count;x++)
+            {
+                if (pressKeys[x].Time == old)
+                {
+                    pressKeys[x].Time = 0;
+                    continue;
+                }
+                var t = pressKeys[x].Time;
+                pressKeys[x].Time -= old;
+                old = t;
             }
         }
     }
