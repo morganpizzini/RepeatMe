@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33213.308
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RepeatMe", "RepeatMe\RepeatMe.csproj", "{0017513B-4782-4091-874A-6277F31066E4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0017513B-4782-4091-874A-6277F31066E4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0017513B-4782-4091-874A-6277F31066E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0017513B-4782-4091-874A-6277F31066E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0017513B-4782-4091-874A-6277F31066E4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {BF18C14A-E1F6-4159-B2DD-597D78C2001A}
+	EndGlobalSection
+EndGlobal
