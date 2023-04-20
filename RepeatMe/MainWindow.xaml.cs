@@ -14,10 +14,12 @@ using Button = RepeatMe.Models.Button;
 using System.Windows.Threading;
 using System.Linq;
 using System.Diagnostics;
+using static RepeatMe.Models.Button;
+using System.Windows.Input;
 
 namespace RepeatMe
 {
-
+   
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
@@ -29,10 +31,18 @@ namespace RepeatMe
             SensibilityRange = 50,
             MaxRotationNumber = 0,
             DefaultKeyPress = "z",
-            PressKeys = new Dictionary<string, int[]>()
+            DefaultKeyModifiers = new List<string> { "SHIFT" },
+            PressKeys = new List<KeyToPressDictionary>()
                 {
-                    { "1", new int[] {4000,5000,6000} },
-                    { "2", new int[] {2000,7000 } }
+                    new KeyToPressDictionary{ Key = new KeyToPress
+                    {
+                        Key = "1"
+                    }, Values =  new int[] {4000,5000,6000} },
+                    new KeyToPressDictionary{ Key = new KeyToPress
+                    {
+                        Key = "2",
+                        Modifiers = new List<string>{"SHIFT" }
+                    }, Values = new int[] {2000,7000 } }
                 },
             Interval = 10
         };
@@ -46,7 +56,8 @@ namespace RepeatMe
         bool enableDefaultKey = true;
         int rotation = 0;
 
-        short deafultKeyPress;
+        BT7 deafultKeyPress;
+        IList<BT6> deafultKeyModifiers;
 
         List<LetterTime> pressKeys = new List<LetterTime>();
 
@@ -75,7 +86,7 @@ namespace RepeatMe
             }
             UpdateForegroundWindow();
 
-            //TaskKeys();
+            TaskKeys();
 
             TaskDefault();
 
@@ -91,7 +102,7 @@ namespace RepeatMe
                 if (currentWindow != processId)
                     continue;
                 await Task.Delay(key.Time);
-                Button.PressKey(key.Letter);
+                Button.PressKey(key.Letter,key.Modifiers);
                 await Task.Delay(50);
             }
         }
@@ -101,10 +112,10 @@ namespace RepeatMe
             while (timer.IsEnabled)
             {
                 currentWindow = User.GetForegroundWindow();
-                await Task.Delay(1000); 
+                await Task.Delay(500);
             }
         }
-        
+
         private async void TaskDefault()
         {
             while (timer.IsEnabled)
@@ -114,12 +125,12 @@ namespace RepeatMe
                     await Task.Delay(1000);
                     continue;
                 }
-                Button.PressKey(deafultKeyPress);
+                Button.PressKey(deafultKeyPress,deafultKeyModifiers);
                 await Task.Delay(settings.StandardDelayTime);
             }
         }
 
-       
+
 
         private void processlist_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -150,7 +161,7 @@ namespace RepeatMe
             timer.Interval = TimeSpan.FromSeconds(interval);
             timer.Start();
 
-            Timer_Tick(null,null);
+            Timer_Tick(null, null);
 
             btnFind.IsEnabled = false;
             processlist.IsEnabled = false;
@@ -227,7 +238,7 @@ namespace RepeatMe
             saveFileDialog.FileName = "config";
 
             if (saveFileDialog.ShowDialog() == true)
-                File.WriteAllText(saveFileDialog.FileName, JsonConvert.SerializeObject(settings,Formatting.Indented));
+                File.WriteAllText(saveFileDialog.FileName, JsonConvert.SerializeObject(settings, Formatting.Indented));
         }
 
         private void ResetConfig()
@@ -235,24 +246,25 @@ namespace RepeatMe
             txbInterval.Text = settings.Interval.ToString();
 
             enableDefaultKey = !string.IsNullOrEmpty(settings.DefaultKeyPress);
-
-            deafultKeyPress = enableDefaultKey ? (short)Enum.Parse(typeof(Button.BT7), $"KEY_{settings.DefaultKeyPress.ToUpper()}") : default;
+            
+            deafultKeyPress = (Button.BT7)Enum.Parse(typeof(Button.BT7), $"KEY_{settings.DefaultKeyPress.ToUpper()}");
+            deafultKeyModifiers = settings.DefaultKeyModifiers.Select(x => (Button.BT6)Enum.Parse(typeof(Button.BT6), x.ToUpper())).ToList();
 
             pressKeys.Clear();
-            
+
             foreach (var key in settings.PressKeys)
             {
-                var letter = (short)Enum.Parse(typeof(Button.BT7), $"KEY_{key.Key.ToUpper()}");
-                pressKeys.AddRange(key.Value.Select(i => new LetterTime
+                pressKeys.AddRange(key.Values.Select(i => new LetterTime
                 {
-                    Letter = (short)Enum.Parse(typeof(Button.BT7), $"KEY_{key.Key.ToUpper()}"),
+                    Letter = (Button.BT7)Enum.Parse(typeof(Button.BT7), $"KEY_{key.Key.Key.ToUpper()}"),
+                    Modifiers= key.Key.Modifiers.Select(x=> (Button.BT6)Enum.Parse(typeof(Button.BT6), x.ToUpper())).ToList(),
                     Time = i
                 }));
-                
+
             }
-            pressKeys = pressKeys.OrderBy(x=>x.Time).ToList();
+            pressKeys = pressKeys.OrderBy(x => x.Time).ToList();
             var old = 0;
-            for(int x = 0; x < pressKeys.Count;x++)
+            for (int x = 0; x < pressKeys.Count; x++)
             {
                 if (pressKeys[x].Time == old)
                 {

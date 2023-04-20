@@ -24,7 +24,7 @@ namespace RepeatMe.Models
         /// 
         /// </summary>
         /// <param name="btn">use EButton.Button.BT7 or use short value example: (short)57 </param>
-        public static void PressKey(BT7 btn)
+        public static void PressKeyNotUsed(BT7 btn)
         {
             //Array of 2 bcs one : keyDown -> two : keyUp
             Input[] array = new Input[1];
@@ -74,7 +74,7 @@ namespace RepeatMe.Models
         /// Simulate key press. Dont forget to activate and deactivate specific window 
         /// </summary>
         /// <param name="btn">use EButton.Button.BT7 or use short value example: (short)57 </param>
-        public static void PressKey(short btn)
+        public static void PressKey(BT7 btn, IList<BT6> modifiers = null)
         {
             //Array of 2 bcs one : keyDown -> two : keyUp
             IList<Input> array = new List<Input>();
@@ -83,24 +83,37 @@ namespace RepeatMe.Models
 
             input.type = (SendInputType.InputKeyboard);
 
-            input.i_union.keyboardinput.dwFlags = BT5.KEYDOWN;
-            input.i_union.keyboardinput.wVk = BT6.SHIFT;
-            array.Add(input);
+            // Key Modifiers Down
+            if (!(modifiers is null))
+            {
+                foreach (var modifier in modifiers)
+                {
+                    input.i_union.keyboardinput.dwFlags = BT5.KEYDOWN;
+                    input.i_union.keyboardinput.wVk = modifier;
+                    array.Add(input);
+                }
+            }
 
             input.i_union.keyboardinput.wVk = (BT6)0;
 
             input.i_union.keyboardinput.time = 0;
             input.i_union.keyboardinput.dwExtraInfo = (UIntPtr)0UL;
             input.i_union.keyboardinput.dwFlags = (BT5.KEYDOWN | BT5.SCANCODE);
-            input.i_union.keyboardinput.wScan = (BT7)btn;
+            input.i_union.keyboardinput.wScan = btn;
             array.Add(input);
 
             input.i_union.keyboardinput.dwFlags = (BT5.KEYUP | BT5.SCANCODE);
             array.Add(input);
 
-            input.i_union.keyboardinput.dwFlags = BT5.KEYUP;
-            input.i_union.keyboardinput.wVk = BT6.SHIFT;
-            array.Add(input);
+            if (!(modifiers is null))
+            {
+                foreach (var modifier in modifiers)
+                {
+                    input.i_union.keyboardinput.dwFlags = BT5.KEYUP;
+                    input.i_union.keyboardinput.wVk = modifier;
+                    array.Add(input);
+                }
+            }
 
             SendInput((uint)array.Count(), array.ToArray(), Input.Size);
         }
