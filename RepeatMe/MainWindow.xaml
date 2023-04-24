@@ -8,14 +8,21 @@
         Title="Repeat Me" Height="300" Width="400" Loaded="Window_Loaded">
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="3.5*"/>
+            <RowDefinition Height="3*"/>
+            <RowDefinition Height="0.5*"/>
             <RowDefinition/>
         </Grid.RowDefinitions>
         <ListBox Grid.Row="0" x:Name="processlist" SelectionChanged="processlist_SelectionChanged"></ListBox>
         <StackPanel Orientation="Horizontal" Grid.Row="1">
-            <Button x:Name="btnFind" Content="Find" Click="Button_Click" Margin="10" Padding="10"/>
-            <Button x:Name="btnStart" Content="Start" Click="Button_Click_2" Margin="10" Padding="10"/>
-            <Button x:Name="btnStop" IsEnabled="False" Content="Stop" Click="Button_Click_1" Margin="10" Padding="10"/>
+            <TextBox x:Name="TxbRename" Width="200px" MaxLines="1"></TextBox>
+            <Button Content="Rename" Click="Rename_Click" Margin="5,0" Padding="3"/>
+            <Button Content="Show" Click="Show_Click" Margin="5,0" Padding="3"/>
+            <Button Content="End" Click="End_Process_Click" Margin="5,0" Padding="3"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Grid.Row="2">
+            <Button x:Name="btnFind" Content="Find" Click="Button_Click" Margin="5" Padding="3"/>
+            <Button x:Name="btnStart" Content="Start" Click="Button_Click_2" Margin="5" Padding="3"/>
+            <Button x:Name="btnStop" IsEnabled="False" Content="Stop" Click="Button_Click_1" Margin="5" Padding="3"/>
             <Rectangle x:Name="rectStatus" Fill="red" Width="10" Height="10"></Rectangle>
             <TextBox x:Name="txbInterval" Width="50" Margin="10,0" Height="30" TextWrapping="NoWrap" AcceptsReturn="False" Text="3" FontSize="18"></TextBox>
             <CheckBox Content="default" Height="20px" IsChecked="True" Unchecked="CheckBox_Checked" Checked="CheckBox_Checked"></CheckBox>

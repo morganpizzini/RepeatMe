@@ -16,50 +16,56 @@ using System.Linq;
 using System.Diagnostics;
 using static RepeatMe.Models.Button;
 using System.Windows.Input;
+using System.Threading;
+using System.ComponentModel;
 
 namespace RepeatMe
 {
-   
+
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
     public partial class MainWindow : Window
     {
+
         Setting sampleSettings = new Setting
         {
-            StandardDelayTime = 50,
+            DefaultDelayTime = 50,
             SensibilityRange = 50,
             MaxRotationNumber = 0,
             DefaultKeyPress = "z",
             DefaultKeyModifiers = new List<string> { "SHIFT" },
             PressKeys = new List<KeyToPressDictionary>()
                 {
-                    new KeyToPressDictionary{ Key = new KeyToPress
-                    {
-                        Key = "1"
-                    }, Values =  new int[] {4000,5000,6000} },
-                    new KeyToPressDictionary{ Key = new KeyToPress
-                    {
+                    new KeyToPressDictionary{
+                        Key = "1",
+                     Values =  new int[] {4000,5000,6000} },
+                    new KeyToPressDictionary{
                         Key = "2",
-                        Modifiers = new List<string>{"SHIFT" }
-                    }, Values = new int[] {2000,7000 } }
+                        Modifiers = new List<string> { "SHIFT" },
+                    Values = new int[] {2000,7000 } }
                 },
             Interval = 10
         };
 
 
         int processId;
-        DispatcherTimer timer;
+        SmartDispatcherTimer timer = new SmartDispatcherTimer();
+        DispatcherTimer dequeueTimer = new DispatcherTimer()
+        {
+            Interval = TimeSpan.FromMilliseconds(100)
+        };
+        Queue<LetterTime> queue = new Queue<LetterTime>();
 
         private Setting settings = new Setting();
 
         bool enableDefaultKey = true;
         int rotation = 0;
 
-        BT7 deafultKeyPress;
-        IList<BT6> deafultKeyModifiers;
+        LetterTime deafultKeyPress;
 
-        List<LetterTime> pressKeys = new List<LetterTime>();
+
+        LetterTime[] pressKeys;
 
         double interval;
 
@@ -68,65 +74,97 @@ namespace RepeatMe
         public MainWindow()
         {
             InitializeComponent();
+
             processlist.DisplayMemberPath = nameof(MyProcess.ProcessDisplay);
             // default settings
             settings = sampleSettings;
-
-            timer = new DispatcherTimer();
-            timer.Tick += Timer_Tick;
-
+            timer.TickTask = Timer_Tick;
+            dequeueTimer.Tick += DequeueTimer_Tick;
             ResetConfig();
         }
-        private void Timer_Tick(object sender, EventArgs e)
+
+        private void DequeueTimer_Tick(object sender, EventArgs e)
+        {
+            if (!timer.IsRunning || queue.Count == 0 || currentWindow != processId)
+                return;
+            var x = queue.Dequeue();
+            Button.PressKey(x.Letter, x.Modifiers);
+        }
+        CancellationTokenSource checkWindowToken = new CancellationTokenSource();
+        private async Task Timer_Tick()
         {
             if (settings.MaxRotationNumber != 0 && rotation >= settings.MaxRotationNumber)
             {
                 Stop();
                 return;
             }
-            UpdateForegroundWindow();
 
-            TaskKeys();
+            if (timer.Interval.TotalSeconds == 0)
+            {
+                //timer.Stop();
+                timer.Interval = TimeSpan.FromSeconds(interval);
+                //timer.Start();
+            }
 
-            TaskDefault();
+            var sourceCancellationToken = new CancellationTokenSource(TimeSpan.FromSeconds(interval-0.2));
+            //if(rotation !=0)
+            //    source.Cancel();
+            //source.Token.WaitHandle
+            //source = new CancellationTokenSource();
 
+            var tasks = new List<Task>
+            {
+                // should be moved outside this tick, maybe should run in Start() and end in Stop()
+                //Task.Run(() => UpdateForegroundWindow().WaitOrCancel(sourceCancellationToken.Token)),
+                Task.Run(() => TaskKeys().WaitOrCancel(sourceCancellationToken.Token)),
+                Task.Run(() => TaskDefault().WaitOrCancel(sourceCancellationToken.Token))
+            };
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (OperationCanceledException ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
             rotation++;
         }
-        private async void TaskKeys()
+        private async Task TaskKeys()
         {
             //TODO should consider waste time before window got focus
             foreach (var key in pressKeys)
             {
                 if (!timer.IsEnabled)
                     return;
-                if (currentWindow != processId)
-                    continue;
                 await Task.Delay(key.Time);
-                Button.PressKey(key.Letter,key.Modifiers);
-                await Task.Delay(50);
+                if (currentWindow == processId)
+                {
+                    queue.Enqueue(key);
+                }
             }
         }
         int currentWindow;
         private async void UpdateForegroundWindow()
         {
-            while (timer.IsEnabled)
+            //while (timer.IsEnabled)
+            while (!checkWindowToken.IsCancellationRequested)
             {
                 currentWindow = User.GetForegroundWindow();
-                await Task.Delay(500);
+                await Task.Delay(100);
             }
         }
 
-        private async void TaskDefault()
+        private async Task TaskDefault()
         {
             while (timer.IsEnabled)
             {
                 if (!enableDefaultKey || currentWindow != processId)
                 {
-                    await Task.Delay(1000);
+                    await Task.Delay(100);
                     continue;
                 }
-                Button.PressKey(deafultKeyPress,deafultKeyModifiers);
-                await Task.Delay(settings.StandardDelayTime);
+                queue.Enqueue(deafultKeyPress);
+                await Task.Delay(settings.DefaultDelayTime);
             }
         }
 
@@ -134,14 +172,51 @@ namespace RepeatMe
 
         private void processlist_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-
+            var selItem = ((ListBox)sender).SelectedItem;
+            if(selItem == null)
+            {
+                processId =0;
+                return;
+            }
             processId = (((ListBox)sender).SelectedItem as MyProcess).ProcessId;
         }
 
+        private void Rename_Click(object sender, RoutedEventArgs e){
+            if(string.IsNullOrEmpty(TxbRename.Text) || processId == 0)
+                return;
+            if (RenameClass.Names.ContainsKey(processId))
+            {
+                RenameClass.Names[processId] = TxbRename.Text;
+            }
+            else
+            {
+                RenameClass.Names.Add(processId,TxbRename.Text);
+            }
+            TxbRename.Text = String.Empty;
+            FindProcess();
+        }
+        private void Show_Click(object sender, RoutedEventArgs e)
+        {
+            User.SetForegroundWindow(processId);
+        }
+        private void End_Process_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedProcess= (int)(processlist.SelectedItem as MyProcess).WindowsProcessId;
+            var process = Process.GetProcessById(selectedProcess);
+            if (process == null)
+                return;
+            process.Kill();
+            FindProcess();
+        }
         private void Button_Click_1(object sender, RoutedEventArgs e) => Stop();
+
         private void Stop()
         {
+            checkWindowToken.Cancel();
             timer.Stop();
+            dequeueTimer.Stop();
+            queue.Clear();
+
             btnFind.IsEnabled = true;
             processlist.IsEnabled = true;
             txbInterval.IsEnabled = true;
@@ -154,14 +229,17 @@ namespace RepeatMe
 
         private void Start()
         {
+            checkWindowToken = new CancellationTokenSource();
             settings.Interval = interval;
 
             rotation = 0;
 
-            timer.Interval = TimeSpan.FromSeconds(interval);
+            timer.Interval = TimeSpan.FromSeconds(0);
+            
             timer.Start();
-
-            Timer_Tick(null, null);
+            UpdateForegroundWindow();
+            
+            dequeueTimer.Start();
 
             btnFind.IsEnabled = false;
             processlist.IsEnabled = false;
@@ -173,17 +251,14 @@ namespace RepeatMe
             rectStatus.Fill = new SolidColorBrush(Color.FromRgb(124, 252, 0));
         }
 
-
         private void Button_Click_2(object sender, RoutedEventArgs e)
         {
             if (processId == 0)
                 return;
-
             var result = double.TryParse(txbInterval.Text, out interval);
             if (!result) return;
 
             Start();
-
         }
 
         private void CheckBox_Checked(object sender, RoutedEventArgs e)
@@ -199,10 +274,13 @@ namespace RepeatMe
         private void FindProcess()
         {
             processlist.Items.Clear();
+
+            var x = HandleCustom.GetOpenWindowsHndlId();
             for (int window = User.GetWindow(User.GetDesktopWindow(), 5); window != 0; window = User.GetWindow(window, 2))
             {
                 if (window == hndl().ToInt32())
                 {
+                    // skip current window
                     window = User.GetWindow(window, 2);
                 }
                 if (User.IsWindowVisible(window) != 0)
@@ -212,7 +290,10 @@ namespace RepeatMe
                     string text = _stringBuilder.ToString();
                     if (text.Length > 0)
                     {
-                        processlist.Items.Add(new MyProcess(text, window));
+                        if (x.ContainsKey(window))
+                        {
+                            processlist.Items.Add(new MyProcess(text, window, x[window]));
+                        }
                     }
                 }
             }
@@ -246,25 +327,25 @@ namespace RepeatMe
             txbInterval.Text = settings.Interval.ToString();
 
             enableDefaultKey = !string.IsNullOrEmpty(settings.DefaultKeyPress);
-            
-            deafultKeyPress = (Button.BT7)Enum.Parse(typeof(Button.BT7), $"KEY_{settings.DefaultKeyPress.ToUpper()}");
-            deafultKeyModifiers = settings.DefaultKeyModifiers.Select(x => (Button.BT6)Enum.Parse(typeof(Button.BT6), x.ToUpper())).ToList();
 
-            pressKeys.Clear();
-
+            deafultKeyPress = new LetterTime(
+                (Button.BT7)Enum.Parse(typeof(Button.BT7), $"KEY_{settings.DefaultKeyPress.ToUpper()}"),
+                settings.DefaultKeyModifiers.Select(x => (Button.BT6)Enum.Parse(typeof(Button.BT6), x.ToUpper())).ToArray());
+            var tmpList = new List<LetterTime>();
             foreach (var key in settings.PressKeys)
             {
-                pressKeys.AddRange(key.Values.Select(i => new LetterTime
-                {
-                    Letter = (Button.BT7)Enum.Parse(typeof(Button.BT7), $"KEY_{key.Key.Key.ToUpper()}"),
-                    Modifiers= key.Key.Modifiers.Select(x=> (Button.BT6)Enum.Parse(typeof(Button.BT6), x.ToUpper())).ToList(),
-                    Time = i
-                }));
-
+                var letter = (Button.BT7)Enum.Parse(typeof(Button.BT7), $"KEY_{key.Key.ToUpper()}");
+                var modifiers = key.Modifiers.Select(x => (Button.BT6)Enum.Parse(typeof(Button.BT6), x.ToUpper())).ToArray();
+                tmpList.AddRange(key.Values.Select(time => new LetterTime
+                (
+                    letter,
+                    time,
+                    modifiers
+                )));
             }
-            pressKeys = pressKeys.OrderBy(x => x.Time).ToList();
+            pressKeys = tmpList.OrderBy(x => x.Time).ToArray();
             var old = 0;
-            for (int x = 0; x < pressKeys.Count; x++)
+            for (int x = 0; x < pressKeys.Length; x++)
             {
                 if (pressKeys[x].Time == old)
                 {
